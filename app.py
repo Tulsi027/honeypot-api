@@ -101,10 +101,18 @@ def honeypot_endpoint():
         if not request.is_json:
             return jsonify({
                 "error": "Invalid content type",
-                "message": "Request must be JSON"
+                "message": "Request must be JSON",
+                "status": "failed"
             }), 400
         
         data = request.get_json()
+        
+        if not data:
+            return jsonify({
+                "error": "Empty request body",
+                "message": "Request body cannot be empty",
+                "status": "failed"
+            }), 400
         
         # Validate required fields
         required_fields = ['message_id', 'sender', 'message']
@@ -113,12 +121,28 @@ def honeypot_endpoint():
         if missing_fields:
             return jsonify({
                 "error": "Missing required fields",
-                "missing": missing_fields
+                "missing": missing_fields,
+                "status": "failed"
             }), 400
         
-        message_id = data['message_id']
-        sender = data['sender']
-        message = data['message']
+        message_id = str(data['message_id']).strip()
+        sender = str(data['sender']).strip()
+        message = str(data['message']).strip()
+        
+        # Validate field values
+        if not message_id or not sender or not message:
+            return jsonify({
+                "error": "Invalid field values",
+                "message": "message_id, sender, and message cannot be empty",
+                "status": "failed"
+            }), 400
+        
+        if len(message) > 5000:
+            return jsonify({
+                "error": "Message too long",
+                "message": "Message must be less than 5000 characters",
+                "status": "failed"
+            }), 400
         timestamp = data.get('timestamp', datetime.utcnow().isoformat())
         
         logger.info(f"Processing message {message_id} from {sender}")
@@ -200,14 +224,25 @@ def honeypot_endpoint():
             new_stage = "initial"
             next_action = "await_clarification"
         
-        # Step 5: Prepare response
+        # Step 5: Prepare response with consistent structure
         response = {
+            "status": "success",
             "message_id": message_id,
             "is_scam": is_scam,
             "confidence": round(confidence, 3),
             "scam_type": scam_type if is_scam else None,
             "persona_response": persona_response,
-            "extracted_intelligence": conversations[sender]['extracted_intel'],
+            "extracted_intelligence": {
+                "phone_numbers": conversations[sender]['extracted_intel'].get('phone_numbers', []),
+                "urls": conversations[sender]['extracted_intel'].get('urls', []),
+                "emails": conversations[sender]['extracted_intel'].get('emails', []),
+                "bank_accounts": conversations[sender]['extracted_intel'].get('bank_accounts', []),
+                "ifsc_codes": conversations[sender]['extracted_intel'].get('ifsc_codes', []),
+                "upi_ids": conversations[sender]['extracted_intel'].get('upi_ids', []),
+                "card_numbers": conversations[sender]['extracted_intel'].get('card_numbers', []),
+                "cvv": conversations[sender]['extracted_intel'].get('cvv', []),
+                "otp": conversations[sender]['extracted_intel'].get('otp', [])
+            },
             "conversation_stage": new_stage,
             "next_action": next_action,
             "timestamp": datetime.utcnow().isoformat()
@@ -220,8 +255,10 @@ def honeypot_endpoint():
     except Exception as e:
         logger.error(f"Error processing request: {str(e)}", exc_info=True)
         return jsonify({
+            "status": "error",
             "error": "Internal server error",
-            "message": str(e)
+            "message": "An error occurred while processing your request",
+            "timestamp": datetime.utcnow().isoformat()
         }), 500
 
 
