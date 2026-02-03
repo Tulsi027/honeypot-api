@@ -140,10 +140,14 @@ def honeypot_endpoint():
                 'persona': None,
                 'extracted_intel': {
                     'bank_accounts': [],
+                    'ifsc_codes': [],
                     'upi_ids': [],
                     'phone_numbers': [],
                     'urls': [],
-                    'emails': []
+                    'emails': [],
+                    'card_numbers': [],
+                    'cvv': [],
+                    'otp': []
                 }
             }
         
