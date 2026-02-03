@@ -89,9 +89,11 @@ class IntelligenceExtractor:
         # Extract bank accounts
         bank_accounts = self.bank_account_pattern.findall(message)
         # Filter to avoid false positives (remove spaces/dashes for length check)
+        # Also exclude numbers that look like phone numbers (10 digits starting with 6-9)
         intel['bank_accounts'] = [
             acc for acc in bank_accounts 
             if 9 <= len(re.sub(r'[\s\-]', '', acc)) <= 18
+            and not re.match(r'^[6-9]\d{9}$', re.sub(r'[\s\-]', '', acc))  # Exclude Indian phone numbers
         ]
         
         # Extract IFSC codes

@@ -25,8 +25,8 @@ class ScamDetector:
                 'type': 'banking_fraud'
             },
             'payment_request': {
-                'keywords': ['pay', 'payment', 'send money', 'transfer', 'upi', 'paytm', 'gpay', 'phonepe'],
-                'weight': 0.7,
+                'keywords': ['pay', 'payment', 'send money', 'transfer', 'upi', 'paytm', 'gpay', 'phonepe', 'account', 'ifsc', 'bank account'],
+                'weight': 0.85,
                 'type': 'payment_scam'
             },
             'investment': {
