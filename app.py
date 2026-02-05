@@ -97,17 +97,8 @@ def honeypot_endpoint():
     }
     """
     try:
-        # Validate request data
-        if not request.is_json:
-            logger.warning(f"Invalid content type: {request.content_type}")
-            return jsonify({
-                "error": "Invalid content type",
-                "message": "Request must be JSON with Content-Type: application/json",
-                "received_content_type": str(request.content_type),
-                "status": "failed"
-            }), 400
-        
-        data = request.get_json(silent=True)
+        # Try to get JSON data regardless of Content-Type for hackathon tester compatibility
+        data = request.get_json(silent=True, force=True)
         
         # If body is empty, use test data for hackathon tester compatibility
         if data is None or not data:
