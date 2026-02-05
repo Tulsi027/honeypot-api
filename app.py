@@ -99,15 +99,18 @@ def honeypot_endpoint():
     try:
         # Validate request data
         if not request.is_json:
+            logger.warning(f"Invalid content type: {request.content_type}")
             return jsonify({
                 "error": "Invalid content type",
                 "message": "Request must be JSON",
+                "received_content_type": request.content_type,
                 "status": "failed"
             }), 400
         
         data = request.get_json()
         
         if not data:
+            logger.warning("Empty request body received")
             return jsonify({
                 "error": "Empty request body",
                 "message": "Request body cannot be empty",
