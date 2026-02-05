@@ -32,8 +32,7 @@ class IntelligenceExtractor:
         
         # Phone numbers (Indian: 10 digits, with optional +91 or 0 prefix)
         self.phone_pattern = re.compile(
-            r'(?:\+91[\s\-]?|0)?[6-9]\d{9}\b|'  # Indian mobile
-            r'\b\d{3}[\s\-]?\d{3}[\s\-]?\d{4}\b'  # General format
+            r'\b(?:\+91[\s\-]?)?[6-9]\d{9}\b'  # Must have word boundary before and after
         )
         
         # URLs (http/https)
@@ -86,15 +85,51 @@ class IntelligenceExtractor:
             'otp': []
         }
         
-        # Extract bank accounts
+        # Extract phone numbers FIRST with context awareness
+        phone_numbers = self.phone_pattern.findall(message)
+        cleaned_phones = [re.sub(r'[\s\-]', '', phone) for phone in phone_numbers]
+        
+        # Keep only valid Indian phone numbers (10 digits starting with 6-9, or with +91)
+        valid_phones = []
+        for phone in cleaned_phones:
+            # Remove +91 prefix if present
+            clean = phone.replace('+91', '').replace('91', '', 1) if phone.startswith(('91', '+91')) else phone
+            # Valid Indian mobile: 10 digits starting with 6-9
+            if len(clean) == 10 and clean[0] in '6789':
+                valid_phones.append(clean)
+        
+        intel['phone_numbers'] = list(set(valid_phones))
+        
+        # Extract bank accounts - exclude phone numbers and check context
         bank_accounts = self.bank_account_pattern.findall(message)
-        # Filter to avoid false positives (remove spaces/dashes for length check)
-        # Also exclude numbers that look like phone numbers (10 digits starting with 6-9)
-        intel['bank_accounts'] = [
-            acc for acc in bank_accounts 
-            if 9 <= len(re.sub(r'[\s\-]', '', acc)) <= 18
-            and not re.match(r'^[6-9]\d{9}$', re.sub(r'[\s\-]', '', acc))  # Exclude Indian phone numbers
-        ]
+        for acc in bank_accounts:
+            clean_acc = re.sub(r'[\s\-]', '', acc)
+            
+            # Skip if it's already identified as a phone number
+            if clean_acc in intel['phone_numbers']:
+                continue
+            
+            # Skip 10-digit numbers starting with 6-9 WITHOUT bank context (likely phone numbers)
+            if len(clean_acc) == 10 and clean_acc[0] in '6789':
+                # Check for bank account context
+                acc_pattern = re.compile(
+                    rf'.{{0,50}}{re.escape(acc)}.{{0,50}}',
+                    re.IGNORECASE | re.DOTALL
+                )
+                context = acc_pattern.search(message)
+                context_text = context.group(0).lower() if context else message.lower()
+                
+                # Bank account keywords
+                has_bank_context = any(keyword in context_text for keyword in 
+                    ['account', 'a/c', 'ac no', 'acc', 'ifsc', 'bank', 'transfer', 'deposit', 'credit'])
+                
+                # If no bank context, skip (it's likely a phone number)
+                if not has_bank_context:
+                    continue
+            
+            # Valid bank account: 9-18 digits
+            if 9 <= len(clean_acc) <= 18:
+                intel['bank_accounts'].append(clean_acc)
         
         # Extract IFSC codes
         intel['ifsc_codes'] = self.ifsc_pattern.findall(message)
@@ -102,26 +137,26 @@ class IntelligenceExtractor:
         # Extract UPI IDs
         intel['upi_ids'] = self.upi_pattern.findall(message)
         
-        # Extract phone numbers
-        phone_numbers = self.phone_pattern.findall(message)
-        # Clean up phone numbers (remove spaces and dashes)
-        intel['phone_numbers'] = [
-            re.sub(r'[\s\-]', '', phone) for phone in phone_numbers
-        ]
-        
         # Extract URLs
         intel['urls'] = self.url_pattern.findall(message)
         
         # Extract emails
         intel['emails'] = self.email_pattern.findall(message)
         
-        # Extract card numbers
+        # Extract card numbers (exclude if already in bank accounts or phones)
         card_numbers = self.card_pattern.findall(message)
-        # Filter valid card numbers (Luhn algorithm could be added here)
-        intel['card_numbers'] = [
-            card for card in card_numbers 
-            if 13 <= len(re.sub(r'[\s\-]', '', card)) <= 19
-        ]
+        for card in card_numbers:
+            clean_card = re.sub(r'[\s\-]', '', card)
+            
+            # Skip if already categorized
+            if clean_card in intel['phone_numbers'] or clean_card in intel['bank_accounts']:
+                continue
+            
+            # Valid card: 13-19 digits, often in groups of 4
+            if 13 <= len(clean_card) <= 19:
+                # Check if it has the typical card format (groups of 4)
+                if ' ' in card or '-' in card or len(clean_card) == 16:
+                    intel['card_numbers'].append(clean_card)
         
         # Extract CVV
         cvv_matches = self.cvv_pattern.findall(message)
